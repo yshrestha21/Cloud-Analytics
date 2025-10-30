@@ -1,0 +1,96 @@
+"""
+Data Extraction Module
+Handles extracting data from Google Cloud Storage
+"""
+
+from google.cloud import storage
+import pandas as pd
+from io import StringIO
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class DataExtractor:
+    """Handles data extraction from Google Cloud Storage"""
+    
+    def __init__(self, bucket_name):
+        """
+        Initialize extractor with GCS bucket
+        
+        Args:
+            bucket_name: Name of the Google Cloud Storage bucket
+        """
+        self.bucket_name = bucket_name
+        self.client = storage.Client()
+        self.bucket = self.client.bucket(bucket_name)
+        logger.info(f"DataExtractor initialized for bucket: {bucket_name}")
+    
+    def extract_csv(self, file_name):
+        """
+        Extract CSV file from GCS and return as DataFrame
+        
+        Args:
+            file_name: Name of the CSV file to extract
+            
+        Returns:
+            pandas DataFrame containing the data
+        """
+        try:
+            logger.info(f"Extracting {file_name} from {self.bucket_name}...")
+            blob = self.bucket.blob(file_name)
+            
+            if not blob.exists():
+                raise FileNotFoundError(f"{file_name} not found in {self.bucket_name}")
+            
+            # Download and parse CSV
+            data = blob.download_as_text()
+            df = pd.read_csv(StringIO(data))
+            
+            logger.info(f" Extracted {len(df)} rows, {len(df.columns)} columns")
+            return df
+            
+        except Exception as e:
+            logger.error(f"Extraction failed: {e}")
+            raise
+    
+    def list_files(self):
+        """
+        List all files in the bucket
+        
+        Returns:
+            List of file names
+        """
+        try:
+            blobs = list(self.bucket.list_blobs())
+            file_names = [blob.name for blob in blobs]
+            logger.info(f"Found {len(file_names)} files in {self.bucket_name}")
+            return file_names
+        except Exception as e:
+            logger.error(f" Failed to list files: {e}")
+            raise
+    
+    def get_file_info(self, file_name):
+        """
+        Get metadata about a file
+        
+        Args:
+            file_name: Name of the file
+            
+        Returns:
+            Dictionary with file metadata
+        """
+        try:
+            blob = self.bucket.blob(file_name)
+            if blob.exists():
+                blob.reload()
+                return {
+                    'name': blob.name,
+                    'size': blob.size,
+                    'created': blob.time_created,
+                    'updated': blob.updated
+                }
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get file info: {e}")
+            raise
